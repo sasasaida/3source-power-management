@@ -1,36 +1,25 @@
-from pydantic import BaseModel, Field
+from enum import Enum
 from typing import Any
 
-
-class HourData(BaseModel):
-    hour: int
-    demand_kwh: float
-    solar_kwh: float
-    tariff_bdt_per_kwh: float
+from pydantic import BaseModel
 
 
-class Battery(BaseModel):
-    capacity_kwh: float
-    initial_energy_kwh: float
-    minimum_energy_kwh: float
-    max_charge_kwh_per_hour: float
-    max_discharge_kwh_per_hour: float
-
-
-class EnergyRequest(BaseModel):
-    scenario_id: str
-    operator_notes: list[str]
-    hours: list[HourData] = Field(min_length=24, max_length=24)
-    battery: Battery
-
+class DirectiveType(str, Enum):
+    SOLAR_REDUCTION = "solar_reduction"
+    MINIMUM_BATTERY_RESERVE = "minimum_battery_reserve"
+    NO_CHARGE_WINDOW = "no_charge_window"
+    NO_DISCHARGE_WINDOW = "no_discharge_window"
+    MAX_GRID_WINDOW = "max_grid_window"
+    NO_OP = "no_op"
 
 
 class DirectiveInterpretation(BaseModel):
     note_index: int
     applies: bool
-    directive_type: str
+    directive_type: DirectiveType
     structured_adjustment: dict[str, Any] | None
     explanation: str
+
 
 class InterpretationResult(BaseModel):
     interpretations: list[DirectiveInterpretation]
