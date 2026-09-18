@@ -83,33 +83,76 @@ def _trivial_plan(scenario: dict) -> dict:
         "peak_grid_kwh": round(peak, 4),
     }
 
+# ----------------------------------------------------------------------
+# Response assembly
+# ----------------------------------------------------------------------
+def generate_summary(scenario: dict, directives: list[dict], result: dict) -> str:
+    """Short human-readable explanation. Cosmetic — not scored directly."""
+    applied = [d for d in directives if d.get("applies")]
+    types = sorted({d["directive_type"] for d in applied if d["directive_type"] != "no_op"})
+
+    if not applied or not types:
+        directives_part = "No operator directives applied."
+    else:
+        directives_part = f"Applied directives: {', '.join(types)}."
+
+    return (
+        f"{directives_part} "
+        f"Total grid {result['total_grid_kwh']:.1f} kWh, "
+        f"cost {result['total_cost_bdt']:.2f} BDT, "
+        f"peak {result['peak_grid_kwh']:.1f} kWh."
+    )
+
+
+def build_response(scenario: dict, directives: list[dict], result: dict) -> dict:
+    """
+    Merge directive interpretation + optimizer plan into the exact
+    response schema the judge expects.
+    """
+    return {
+        "scenario_id": scenario["scenario_id"],
+        "directive_interpretation": directives,
+        "hourly_plan": result["hourly_plan"],
+        "total_grid_kwh": result["total_grid_kwh"],
+        "total_cost_bdt": result["total_cost_bdt"],
+        "peak_grid_kwh": result["peak_grid_kwh"],
+        "plan_summary": generate_summary(scenario, directives, result),
+    }
+
+
+def full_response(scenario: dict, directives: list[dict]) -> dict:
+    """
+    One-call convenience for main.py: run optimizer with fallbacks,
+    then assemble the final judge-facing response.
+    """
+    result = run_pipeline(scenario, directives)
+    return build_response(scenario, directives, result)
 
 # ----------------------------------------------------------------------
 # Standalone test harness
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
+    import json
     from fixtures import SAMPLE_SCENARIO, SAMPLE_DIRECTIVES
 
     print("=" * 70)
-    print("Normal path — full directives")
+    print("Full response shape")
     print("=" * 70)
-    r = run_pipeline(SAMPLE_SCENARIO, SAMPLE_DIRECTIVES)
-    print(f"  cost={r['total_cost_bdt']:.2f}  grid={r['total_grid_kwh']:.1f}")
+    response = full_response(SAMPLE_SCENARIO, SAMPLE_DIRECTIVES)
 
-    print()
-    print("=" * 70)
-    print("Fallback path — infeasible directive")
-    print("=" * 70)
-    bad = [{
-        "note_index": 0,
-        "applies": True,
-        "directive_type": "minimum_battery_reserve",
-        "structured_adjustment": {"hours": [5], "minimum_energy_kwh": 9999},
-        "explanation": "",
-    }]
-    r = run_pipeline(SAMPLE_SCENARIO, bad)
-    print(f"  cost={r['total_cost_bdt']:.2f}  grid={r['total_grid_kwh']:.1f}")
-    print("  (this is the fallback plan — no directives applied)")
+    # Print only the top-level keys and summary to keep output readable
+    for k in ("scenario_id", "total_grid_kwh", "total_cost_bdt",
+              "peak_grid_kwh", "plan_summary"):
+        print(f"  {k}: {response[k]}")
+    print(f"  directive_interpretation: {len(response['directive_interpretation'])} entries")
+    print(f"  hourly_plan: {len(response['hourly_plan'])} entries")
 
+    # Quick schema assertion
+    assert set(response.keys()) == {
+        "scenario_id", "directive_interpretation", "hourly_plan",
+        "total_grid_kwh", "total_cost_bdt", "peak_grid_kwh", "plan_summary",
+    }, f"unexpected keys: {response.keys()}"
+    assert len(response["directive_interpretation"]) == len(SAMPLE_SCENARIO["operator_notes"])
+    assert len(response["hourly_plan"]) == 24
     print()
-    print("ALL DONE")
+    print("SCHEMA OK")
