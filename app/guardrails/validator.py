@@ -11,172 +11,143 @@ from app.schemas import (
 )
 
 
-def validate_hour(hour: int) -> None:
-    """Validate that an hour is an integer from 0 through 23."""
+def validate_hours(hours: list[int]) -> None:
+    """Validate that hours are unique integers from 0 to 23 in ascending order."""
 
-    if not isinstance(hour, int):
-        raise ValueError(
-            f"Hour must be an integer, got {type(hour).__name__}."
-        )
+    if not isinstance(hours, list):
+        raise ValueError("hours must be a list")
 
-    if not 0 <= hour <= 23:
-        raise ValueError(
-            f"Invalid hour: {hour}. "
-            "Hour must be between 0 and 23."
-        )
+    if any(not isinstance(hour, int) for hour in hours):
+        raise ValueError("hours must contain only integers")
 
+    if any(hour < 0 or hour > 23 for hour in hours):
+        raise ValueError("hours must be between 0 and 23")
 
-def validate_time_window(
-    start_hour: int,
-    end_hour: int,
-) -> None:
-    """Validate a [start, end) hourly window."""
+    if len(hours) != len(set(hours)):
+        raise ValueError("hours must be unique")
 
-    validate_hour(start_hour)
-    validate_hour(end_hour)
-
-    if start_hour >= end_hour:
-        raise ValueError(
-            f"Invalid time window: {start_hour} to {end_hour}. "
-            "start_hour must be less than end_hour."
-        )
+    if hours != sorted(hours):
+        raise ValueError("hours must be in ascending order")
 
 
 def validate_solar_reduction(
     directive: SolarReductionDirective,
-) -> None:
+) -> SolarReductionDirective:
+
     adjustment = directive.structured_adjustment
 
-    validate_time_window(
-        adjustment.start_hour,
-        adjustment.end_hour,
-    )
-
-    # Contest requirement: 0 <= factor <= 1
-    if not 0 <= adjustment.factor <= 1:
-        raise ValueError(
-            f"Invalid solar factor: {adjustment.factor}. "
-            "Factor must be between 0 and 1 inclusive."
-        )
+    validate_hours(adjustment.hours)
 
     if not math.isfinite(adjustment.factor):
-        raise ValueError(
-            "Solar factor must be finite."
-        )
+        raise ValueError("solar reduction factor must be finite")
+
+    if not 0 <= adjustment.factor <= 1:
+        raise ValueError("solar reduction factor must be between 0 and 1")
+
+    return directive
 
 
 def validate_minimum_battery_reserve(
     directive: MinimumBatteryReserveDirective,
     battery_capacity_kwh: float,
-) -> None:
+) -> MinimumBatteryReserveDirective:
+
     adjustment = directive.structured_adjustment
+
+    validate_hours(adjustment.hours)
 
     reserve = adjustment.minimum_energy_kwh
 
     if not math.isfinite(reserve):
-        raise ValueError(
-            "Battery reserve must be finite."
-        )
+        raise ValueError("minimum battery reserve must be finite")
 
     if reserve < 0:
-        raise ValueError(
-            "Battery reserve cannot be negative."
-        )
+        raise ValueError("minimum battery reserve cannot be negative")
 
     if reserve > battery_capacity_kwh:
         raise ValueError(
-            f"Battery reserve ({reserve}) cannot exceed "
-            f"battery capacity ({battery_capacity_kwh})."
+            "minimum battery reserve cannot exceed battery capacity"
         )
+
+    return directive
 
 
 def validate_no_charge_window(
     directive: NoChargeWindowDirective,
-) -> None:
-    adjustment = directive.structured_adjustment
+) -> NoChargeWindowDirective:
 
-    validate_time_window(
-        adjustment.start_hour,
-        adjustment.end_hour,
-    )
+    validate_hours(directive.structured_adjustment.hours)
+
+    return directive
 
 
 def validate_no_discharge_window(
     directive: NoDischargeWindowDirective,
-) -> None:
-    adjustment = directive.structured_adjustment
+) -> NoDischargeWindowDirective:
 
-    validate_time_window(
-        adjustment.start_hour,
-        adjustment.end_hour,
-    )
+    validate_hours(directive.structured_adjustment.hours)
+
+    return directive
 
 
 def validate_max_grid_window(
     directive: MaxGridWindowDirective,
-) -> None:
+) -> MaxGridWindowDirective:
+
     adjustment = directive.structured_adjustment
 
-    validate_time_window(
-        adjustment.start_hour,
-        adjustment.end_hour,
-    )
+    validate_hours(adjustment.hours)
 
     max_grid = adjustment.max_grid_kwh
 
     if not math.isfinite(max_grid):
-        raise ValueError(
-            "max_grid_kwh must be finite."
-        )
+        raise ValueError("maximum grid value must be finite")
 
     if max_grid < 0:
-        raise ValueError(
-            "max_grid_kwh cannot be negative."
-        )
+        raise ValueError("maximum grid value cannot be negative")
+
+    return directive
 
 
-def validate_no_op(
-    directive: NoOpDirective,
-) -> None:
+def validate_no_op(directive: NoOpDirective) -> NoOpDirective:
+
     if directive.applies is not False:
-        raise ValueError(
-            "no_op must have applies=False."
-        )
+        raise ValueError("no_op directive must have applies=false")
 
     if directive.structured_adjustment is not None:
         raise ValueError(
-            "no_op must have structured_adjustment=None."
+            "no_op directive must have structured_adjustment=null"
         )
+
+    return directive
 
 
 def validate_applies_semantics(
     directive: DirectiveInterpretation,
 ) -> None:
-    """Every directive must follow the contest applies rules."""
 
     if directive.directive_type == "no_op":
 
         if directive.applies is not False:
             raise ValueError(
-                "no_op must have applies=False."
+                "no_op directive must have applies=false"
             )
 
         if directive.structured_adjustment is not None:
             raise ValueError(
-                "no_op must have structured_adjustment=None."
+                "no_op directive must have structured_adjustment=null"
             )
 
     else:
 
         if directive.applies is not True:
             raise ValueError(
-                f"{directive.directive_type} must have applies=True."
+                "non-no_op directive must have applies=true"
             )
 
         if directive.structured_adjustment is None:
             raise ValueError(
-                f"{directive.directive_type} requires "
-                "structured_adjustment."
+                "non-no_op directive must have structured_adjustment"
             )
 
 
@@ -185,56 +156,32 @@ def validate_directive(
     battery_capacity_kwh: float,
 ) -> DirectiveInterpretation:
 
-    # First check the universal applies rules.
     validate_applies_semantics(directive)
 
-    # Then validate the directive-specific data.
     if isinstance(directive, SolarReductionDirective):
+        return validate_solar_reduction(directive)
 
-        validate_solar_reduction(directive)
-
-    elif isinstance(
-        directive,
-        MinimumBatteryReserveDirective,
-    ):
-
-        validate_minimum_battery_reserve(
+    if isinstance(directive, MinimumBatteryReserveDirective):
+        return validate_minimum_battery_reserve(
             directive,
             battery_capacity_kwh,
         )
 
-    elif isinstance(
-        directive,
-        NoChargeWindowDirective,
-    ):
+    if isinstance(directive, NoChargeWindowDirective):
+        return validate_no_charge_window(directive)
 
-        validate_no_charge_window(directive)
+    if isinstance(directive, NoDischargeWindowDirective):
+        return validate_no_discharge_window(directive)
 
-    elif isinstance(
-        directive,
-        NoDischargeWindowDirective,
-    ):
+    if isinstance(directive, MaxGridWindowDirective):
+        return validate_max_grid_window(directive)
 
-        validate_no_discharge_window(directive)
+    if isinstance(directive, NoOpDirective):
+        return validate_no_op(directive)
 
-    elif isinstance(
-        directive,
-        MaxGridWindowDirective,
-    ):
-
-        validate_max_grid_window(directive)
-
-    elif isinstance(directive, NoOpDirective):
-
-        validate_no_op(directive)
-
-    else:
-        raise ValueError(
-            f"Unsupported directive type: "
-            f"{type(directive).__name__}"
-        )
-
-    return directive
+    raise ValueError(
+        f"Unsupported directive type: {directive.directive_type}"
+    )
 
 
 def validate_interpretations(
@@ -243,52 +190,34 @@ def validate_interpretations(
     battery_capacity_kwh: float,
 ) -> list[DirectiveInterpretation]:
 
-    # ---------------------------------------------------------
-    # 1. Every operator note must have exactly one interpretation
-    # ---------------------------------------------------------
-
+    # Every operator note must have exactly one interpretation.
     if len(interpretations) != number_of_notes:
         raise ValueError(
-            "Every operator note must have exactly one "
-            "interpretation."
+            f"Expected {number_of_notes} interpretations, "
+            f"got {len(interpretations)}"
         )
 
-    seen_note_indices: set[int] = set()
-
-    validated: list[DirectiveInterpretation] = []
+    seen_note_indices = set()
+    validated = []
 
     for directive in interpretations:
 
-        # -----------------------------------------------------
-        # 2. note_index must identify an existing note
-        # -----------------------------------------------------
+        note_index = directive.note_index
 
-        if not isinstance(directive.note_index, int):
+        if not isinstance(note_index, int):
+            raise ValueError("note_index must be an integer")
+
+        if not 0 <= note_index < number_of_notes:
             raise ValueError(
-                "note_index must be an integer."
+                f"note_index {note_index} does not refer to an existing note"
             )
 
-        if not 0 <= directive.note_index < number_of_notes:
+        if note_index in seen_note_indices:
             raise ValueError(
-                f"Invalid note_index: {directive.note_index}. "
-                f"Valid range is 0 to {number_of_notes - 1}."
+                f"Duplicate note_index: {note_index}"
             )
 
-        # -----------------------------------------------------
-        # 3. Every note must appear exactly once
-        # -----------------------------------------------------
-
-        if directive.note_index in seen_note_indices:
-            raise ValueError(
-                f"Duplicate note_index: "
-                f"{directive.note_index}"
-            )
-
-        seen_note_indices.add(directive.note_index)
-
-        # -----------------------------------------------------
-        # 4. Validate the actual directive
-        # -----------------------------------------------------
+        seen_note_indices.add(note_index)
 
         validated_directive = validate_directive(
             directive,
@@ -297,12 +226,7 @@ def validate_interpretations(
 
         validated.append(validated_directive)
 
-    # ---------------------------------------------------------
-    # 5. Make the result deterministic
-    # ---------------------------------------------------------
-
-    validated.sort(
-        key=lambda directive: directive.note_index
-    )
+    # Return interpretations in the same order as the operator notes.
+    validated.sort(key=lambda directive: directive.note_index)
 
     return validated

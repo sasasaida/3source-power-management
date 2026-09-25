@@ -1,17 +1,35 @@
 import pytest
 
-from app.guardrails.validator import validate_time_window
+from app.guardrails.validator import validate_hours
 
 
-def test_valid_time_window():
-    validate_time_window(13, 15)
+def test_valid_hours():
+    validate_hours([13, 14])
 
 
-def test_invalid_hour():
+def test_single_valid_hour():
+    validate_hours([23])
+
+
+def test_hours_must_be_between_0_and_23():
     with pytest.raises(ValueError):
-        validate_time_window(24, 25)
+        validate_hours([24])
 
 
-def test_start_hour_must_be_before_end_hour():
+def test_negative_hour_is_invalid():
     with pytest.raises(ValueError):
-        validate_time_window(15, 13)
+        validate_hours([-1])
+
+
+def test_hours_must_be_unique():
+    with pytest.raises(ValueError):
+        validate_hours([13, 13])
+
+
+def test_hours_must_be_sorted():
+    with pytest.raises(ValueError):
+        validate_hours([14, 13])
+
+
+def test_empty_hours_are_allowed():
+    validate_hours([])
