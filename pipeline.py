@@ -83,7 +83,7 @@ if __name__ == "__main__":
         "note_index": 0, "applies": True,
         "directive_type": "minimum_battery_reserve",
         "structured_adjustment": {"hours": [5], "minimum_energy_kwh": 9999},
-        "explanation": "",
+        "explanation": "Reserve requirement exceeds battery capacity.",
     }]
     try:
         full_response(SAMPLE_SCENARIO, bad)
