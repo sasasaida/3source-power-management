@@ -180,9 +180,6 @@ Operator notes:
         format=InterpretationResult.model_json_schema(),
     )
 
-    print("\nRAW OLLAMA RESPONSE:")
-    print(response.message.content)
-    print()
 
     try:
         result = InterpretationResult.model_validate_json(
