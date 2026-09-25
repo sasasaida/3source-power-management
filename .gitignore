@@ -1,4 +1,23 @@
-.venv/
-.env
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# Secrets
+.env
+.env.*
+*.key
+secrets.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
