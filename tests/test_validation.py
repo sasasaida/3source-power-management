@@ -18,7 +18,7 @@ def main() -> None:
         print()
         print("Note:", interpretation.note_index)
         print("Applies:", interpretation.applies)
-        print("Directive:", interpretation.directive_type)
+        print("Directive:", interpretation.directive_type.value)
         print("Adjustment:", interpretation.structured_adjustment)
         print("Explanation:", interpretation.explanation)
 
