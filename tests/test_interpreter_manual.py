@@ -1,4 +1,5 @@
 from app.llm.interpreter import interpret_operator_notes
+from app.guardrails.validator import validate_interpretations
 
 
 def main() -> None:
@@ -10,11 +11,16 @@ def main() -> None:
     ]
 
     result = interpret_operator_notes(notes)
+    validated = validate_interpretations(
+        result.interpretations,
+        len(notes),
+        battery_capacity_kwh=500,
+    )
 
     print("\nSUCCESS")
     print("=" * 50)
 
-    for interpretation in result.interpretations:
+    for interpretation in validated:
         print()
         print("Note:", interpretation.note_index)
         print("Applies:", interpretation.applies)
