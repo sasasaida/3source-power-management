@@ -5,8 +5,8 @@ from app.guardrails.validator import validate_interpretations
 def main() -> None:
     notes = [
         "Do not charge the battery between 2 PM and 4 PM.",
-        "Solar output will be reduced by 80 percent from 1 PM to 3 PM.",
-        "Keep at least 100 kWh in the battery at all times.",
+        "Solar output will drop to about 20% from 1 PM to 3 PM." ,
+        "Keep at least 120 kWh in reserve from 6 PM until 9 PM." ,
         "Please keep the facility clean.",
     ]
 
